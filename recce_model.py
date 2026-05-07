@@ -243,7 +243,10 @@ _ENCODER_FEATURES = 2048
 class Recce(nn.Module):
     """End-to-End Reconstruction-Classification Learning for Face Forgery Detection."""
 
-    def __init__(self, num_classes=2, drop_rate=0.2):
+    # Manipulation-type class names (for the 4-class head)
+    MANIPULATION_CLASSES = ['DeepFakes', 'Face2Face', 'FaceSwap', 'NeuralTextures']
+
+    def __init__(self, num_classes=2, drop_rate=0.2, num_types=4):
         super().__init__()
         self.name = "xception"
         self.loss_inputs = dict()
@@ -251,6 +254,31 @@ class Recce(nn.Module):
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.dropout = nn.Dropout(drop_rate)
         self.fc = nn.Linear(_ENCODER_FEATURES, num_classes)
+
+        # ── Multi-task heads ───────────────────────────────────────────────
+        # Head 1: manipulation-type classifier (DF / F2F / FS / NT)
+        self.type_head = nn.Sequential(
+            nn.Linear(_ENCODER_FEATURES, 256),
+            nn.ReLU(inplace=True),
+            nn.Dropout(drop_rate),
+            nn.Linear(256, num_types),
+        )
+        # Head 2: binary forgery-region mask predictor
+        self.mask_project = nn.Linear(_ENCODER_FEATURES, 512 * 4 * 4)
+        self.mask_decode = nn.Sequential(
+            nn.UpsamplingBilinear2d(scale_factor=2),          # 8 x 8
+            nn.Conv2d(512, 256, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(256), nn.ReLU(inplace=True),
+            nn.UpsamplingBilinear2d(scale_factor=2),          # 16 x 16
+            nn.Conv2d(256, 128, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(128), nn.ReLU(inplace=True),
+            nn.UpsamplingBilinear2d(scale_factor=2),          # 32 x 32
+            nn.Conv2d(128, 64, 3, 1, 1, bias=False),
+            nn.BatchNorm2d(64), nn.ReLU(inplace=True),
+            nn.UpsamplingBilinear2d(scale_factor=2),          # 64 x 64
+            nn.Conv2d(64, 1, 1, bias=True),
+            nn.Sigmoid(),
+        )
 
         self.attention = GuidedAttention(depth=728, drop_rate=drop_rate)
         # FrequencyBranch is kept for checkpoint key compatibility but not called
@@ -356,3 +384,19 @@ class Recce(nn.Module):
 
     def forward(self, x):
         return self.classifier(self.features(x))
+
+    def forward_multitask(self, x):
+        """Multi-task forward pass.
+
+        Returns a dict:
+            fake_logits  – (B, 2)            real/fake binary logits
+            type_logits  – (B, num_types)    manipulation-type logits (DF/F2F/FS/NT)
+            mask         – (B, 1, 64, 64)    forgery-region probability map in [0, 1]
+        """
+        embedding = self.features(x)
+        mask_spatial = self.mask_project(embedding).reshape(-1, 512, 4, 4)
+        return {
+            'fake_logits': self.fc(embedding),
+            'type_logits': self.type_head(embedding),
+            'mask':        self.mask_decode(mask_spatial),
+        }
