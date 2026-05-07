@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <title>Deepfake Detection: Improving RECCE Generalization Across Compression Levels</title>
+
+  <!-- Bootstrap core CSS -->
+  <link href="../vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    /* ── Page hero ── */
+    .page-hero {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      color: #fff;
+      padding: 80px 0 50px;
+      margin-bottom: 0;
+    }
+    .page-hero h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 1rem;
+    }
+    .page-hero .author {
+      font-size: 1rem;
+      color: rgba(255,255,255,0.7);
+      margin: 0;
+    }
+
+    /* ── Section rhythm ── */
+    .section-divider {
+      border: none;
+      border-top: 3px solid #0f3460;
+      width: 60px;
+      margin: 0 0 1.5rem 0;
+    }
+    h2.mt-5 {
+      color: #0f3460;
+      font-weight: 700;
+      font-size: 1.6rem;
+    }
+    h5.mt-5, h5.mt-4 {
+      color: #16213e;
+      font-weight: 600;
+    }
+
+    /* ── Alternating row backgrounds ── */
+    .row-shaded {
+      background-color: #f4f6f9;
+      border-radius: 8px;
+      padding: 1.5rem 1rem;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Table ── */
+    .table thead.thead-dark th { background-color: #0f3460; }
+    .table-success td, .table-success th { background-color: #d4edda !important; }
+
+    /* ── Images ── */
+    .img-container img {
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    .img-container img.no-shadow { box-shadow: none; }
+    p.caption {
+      font-size: 0.83rem;
+      color: #6c757d;
+      margin-top: 0.5rem;
+    }
+
+    /* ── Cards for updates ── */
+    .update-card {
+      border-left: 5px solid #0f3460;
+      background: #fff;
+      border-radius: 0 6px 6px 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    /* ── Footer ── */
+    .site-footer {
+      background: #1a1a2e;
+      color: rgba(255,255,255,0.6);
+      text-align: center;
+      padding: 2rem 0;
+      font-size: 0.85rem;
+      margin-top: 3rem;
+    }
+
+    /* ── Confusion matrix grid captions ── */
+    .cm-label {
+      font-size: 0.82rem;
+      color: #495057;
+      margin-top: 0.4rem;
+    }
+
+    body { color: #333; }
+    p { line-height: 1.75; }
+  </style>
+
+</head>
+
+<body style="background-color:#fafafa;">
+
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark static-top">
+    <div class="container">
+      <a class="navbar-brand" href="../home.html">Practical Machine Deep Learning</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarResponsive">
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="../home.html">Home
+              <span class="sr-only">(current)</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="../about.html">About</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="../contact.html">Contact</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <div class="page-hero text-center">
+    <div class="container">
+      <p style="font-size:0.85rem;letter-spacing:0.08em;color:rgba(255,255,255,0.55);margin-bottom:0.75rem;">
+        CSCE 5310 &mdash; Applied Machine Learning &nbsp;|&nbsp; AUC &nbsp;|&nbsp; Spring 2026
+      </p>
+      <h1>Deepfake Detection: Improving RECCE<br/>Generalization Across Compression Levels</h1>
+    </div>
+  </div>
+
+  <!-- Page Content -->
+  <div class="container" style="max-width:960px;">
+
+
+    <!-- ===================== PROBLEM STATEMENT ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Problem Statement</h2><hr class="section-divider"/>
+        <p>
+          Deepfake detectors are typically trained on high-quality video, but real-world video is
+          almost always compressed. The <strong>RECCE</strong> model (Reconstruction-guided
+          Classification for Effective Deepfake Detection, CVPR 2022) achieves 97% accuracy on
+          lightly compressed FaceForensics++ video (C23) but drops to 74% on the same content under
+          heavy compression (C40), creating a <strong>23-point generalization gap</strong>. This gap is the
+          core problem: a detector that fails under compression cannot be reliably deployed in the real world.
+        </p>
+        <p>
+          The goal of this project is to close that gap by testing three architectural modifications
+          to RECCE: (1) a <strong>Frequency Branch</strong> that injects FFT magnitude spectrum
+          features into the detector, (2) <strong>CBAM attention modules</strong> that direct the
+          Xception encoder to focus on manipulation-relevant regions, and (3)
+          <strong>Multi-Task heads</strong> that add auxiliary supervision for manipulation-type
+          classification and mask prediction. We evaluate all combinations on FaceForensics++ at
+          both compression levels and measure the generalization gap (C23 accuracy − C40 accuracy).
+        </p>
+      </div>
+    </div>
+
+
+    <!-- ===================== DATASET ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Dataset</h2><hr class="section-divider"/>
+        <p>
+          We use <strong>FaceForensics++ (FF++)</strong>, the standard benchmark for deepfake
+          detection. It contains 1,000 original YouTube videos and their manipulated counterparts
+          produced by four methods: <em>DeepFakes, Face2Face, FaceSwap,</em> and
+          <em>NeuralTextures</em>. Each video is released at two compression levels:
+        </p>
+        <ul>
+          <li>
+            <strong>C23 (light compression)</strong>: high visual quality; manipulation artifacts
+            are well-preserved and detectable. This is the training distribution.
+          </li>
+          <li>
+            <strong>C40 (heavy compression)</strong>: strong JPEG-like compression destroys most
+            manipulation artifacts, making detection far harder. This is the out-of-distribution
+            test used to measure generalization.
+          </li>
+        </ul>
+        <p>
+          All models are trained exclusively on C23 and evaluated on both C23 and C40 without
+          retraining. We sample <strong>16 frames per video</strong> for all experiments.
+          The <em>generalization gap</em> (C23 accuracy − C40 accuracy) is our primary robustness
+          metric; a lower gap means less degradation under compression.
+        </p>
+
+        <br/>
+        <div class="img-container" align="center">
+          <img src="main resources/baseline_c23.png" class="img-fluid text-center" style="max-width:500px;">
+        </div>
+        <p class="caption text-center">Baseline model on C23 (light compression): 97% accuracy with only 557 missed fakes out of ~11,000.</p>
+        <br/>
+      </div>
+    </div>
+
+
+    <!-- ===================== INPUT/OUTPUT EXAMPLES ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Input/Output Examples</h2><hr class="section-divider"/>
+        <p>
+          The model receives a <strong>face crop from a video frame</strong> and outputs a binary
+          prediction: <em>Real</em> or <em>Fake</em>. Predictions from 16 frames are aggregated
+          to produce a final video-level decision. The confusion matrices below illustrate model
+          behaviour: rows are the true labels, columns are predicted labels.
+          <em>TN</em> = real correctly kept; <em>FP</em> = real wrongly flagged;
+          <em>FN</em> = fake missed; <em>TP</em> = fake caught.
+        </p>
+        <p>
+          Under <strong>light compression (C23)</strong> the baseline is strong, with very few mistakes
+          in either direction. Under <strong>heavy compression (C40)</strong> performance collapses:
+          nearly 4,000 fake videos slip through undetected. Our modifications specifically target
+          this C40 collapse.
+        </p>
+
+        <br/>
+        <div class="img-container" align="center">
+          <img src="main resources/baseline_c40.png" class="img-fluid text-center" style="max-width:500px;">
+        </div>
+        <p class="caption text-center">Baseline model on C40 (heavy compression): accuracy drops to 74%, with 3,866 missed fakes and 1,954 false alarms. This 23-point gap is what our modifications aim to close.</p>
+        <br/>
+      </div>
+    </div>
+
+
+    <!-- ===================== STATE OF THE ART ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">State of the Art</h2><hr class="section-divider"/>
+        <p>
+          The table below summarises all six configurations we evaluated, comparing C23 accuracy,
+          C40 accuracy, and the generalization gap. The best overall model,
+          <strong>CBAM + Frequency + Multi-Task Head</strong>, achieves a C40 accuracy of
+          <strong>81.60%</strong> and a gap of <strong>0.1540</strong>, reducing the baseline gap
+          by 33% while maintaining 97% C23 accuracy.
+        </p>
+
+        <table class="table table-bordered table-striped">
+          <thead class="thead-dark">
+            <tr>
+              <th>Configuration</th>
+              <th class="text-center">C23 Accuracy</th>
+              <th class="text-center">C40 Accuracy</th>
+              <th class="text-center">Generalization Gap</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Baseline (Standard RECCE)</td>
+              <td class="text-center">97.00%</td>
+              <td class="text-center">74.00%</td>
+              <td class="text-center">0.2300</td>
+            </tr>
+            <tr>
+              <td>Frequency Branch only</td>
+              <td class="text-center">96.20%</td>
+              <td class="text-center">73.50%</td>
+              <td class="text-center">0.2270</td>
+            </tr>
+            <tr>
+              <td>CBAM Attention only</td>
+              <td class="text-center">97.00%</td>
+              <td class="text-center">80.48%</td>
+              <td class="text-center">0.1652</td>
+            </tr>
+            <tr>
+              <td>CBAM + Frequency Branch</td>
+              <td class="text-center">97.30%</td>
+              <td class="text-center">74.01%</td>
+              <td class="text-center">0.2329</td>
+            </tr>
+            <tr>
+              <td>Multi-Task Head only</td>
+              <td class="text-center">96.01%</td>
+              <td class="text-center">76.13%</td>
+              <td class="text-center">0.1988</td>
+            </tr>
+            <tr class="table-success">
+              <td><strong>CBAM + Frequency + Multi-Task Head</strong></td>
+              <td class="text-center"><strong>97.00%</strong></td>
+              <td class="text-center"><strong>81.60%</strong></td>
+              <td class="text-center"><strong>0.1540 &#9733; Best</strong></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <br/>
+        <div class="img-container" align="center">
+          <img src="main resources/generalization_gap.jpeg" class="img-fluid text-center">
+        </div>
+        <p class="caption text-center">Generalization gap (C23 − C40 accuracy) for all six configurations. Lower is better. The dashed line marks the baseline gap (0.23). CBAM-based models consistently fall below it; CBAM + Frequency + Multi-Task Head achieves the best gap of 0.1540.</p>
+        <br/>
+      </div>
+    </div>
+
+
+    <!-- ===================== ORIGINAL MODEL ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Original Model from Literature</h2><hr class="section-divider"/>
+        <p>
+          <strong>RECCE</strong> (Cao et al., CVPR 2022) is a reconstruction-guided deepfake detector.
+          It trains an encoder-decoder to <em>reconstruct</em> real faces, then uses the
+          reconstruction error as a discriminative signal: real faces reconstruct faithfully while
+          manipulated faces leave residuals in the error map. The encoder is an
+          <strong>Xception</strong> backbone pretrained on ImageNet. At inference, encoder features
+          are concatenated with the reconstruction error and passed to a binary classifier.
+        </p>
+        <p>
+          The core insight is that a network trained to reconstruct only real faces will struggle
+          to reconstruct fakes; the residual difference is itself the discriminative feature.
+          This makes RECCE agnostic to the specific manipulation method used. However, RECCE
+          relies heavily on spatial and textural artifacts that are destroyed by heavy video
+          compression, causing the large C23→C40 accuracy drop we aim to address.
+        </p>
+
+        <br/>
+        <div class="img-container" align="center">
+          <img src="main resources/recce_architecture.png" class="img-fluid text-center">
+        </div>
+        <p class="caption text-center">RECCE architecture. The encoder-decoder reconstructs real faces; the reconstruction error combined with encoder features is used for binary classification.</p>
+        <br/>
+      </div>
+    </div>
+
+
+    <!-- ===================== PROPOSED UPDATES ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Proposed Updates</h2><hr class="section-divider"/>
+        <p>
+          We test three architectural modifications to RECCE, individually and in combination,
+          to understand each one's contribution to closing the generalization gap.
+        </p>
+
+        <!-- Update 1: CBAM -->
+        <div class="update-card">
+        <h5 class="mt-0">Update #1: CBAM Attention Modules</h5>
+        <p>
+          <strong>Convolutional Block Attention Modules (CBAM)</strong> were inserted after
+          Xception encoder blocks 1, 2, and 4. CBAM applies channel attention (which feature
+          maps matter) followed by spatial attention (which spatial locations matter), guiding
+          the encoder to focus on manipulation-relevant face regions rather than
+          compression-induced texture patterns. This is the single most impactful modification:
+          CBAM alone raises C40 accuracy from 74.00% to <strong>80.48%</strong> and cuts
+          the generalization gap from 0.2300 to <strong>0.1652</strong>, a 28% reduction,
+          while preserving full C23 accuracy (97.00%).
+        </p>
+        <br/>
+        <div class="img-container" align="center">
+          <img src="main resources/cbam_c40.jpeg" class="img-fluid text-center" style="max-width:500px;">
+        </div>
+        <p class="caption text-center">CBAM-only model on C40: accuracy improves to ~77%, a major improvement over the 74% baseline. (Gap = 0.1652)</p>
+        </div>
+
+        <!-- Update 2: Frequency Branch -->
+        <div class="update-card">
+        <h5 class="mt-0">Update #2: Frequency Branch (FFT Features)</h5>
+        <p>
+          A <strong>Frequency Branch</strong> was added alongside the spatial Xception encoder.
+          It applies <code>torch.fft.fft2</code> to the input image, extracts the log-magnitude
+          spectrum, and processes it through a 4-layer CNN. A learned gate blends the frequency
+          features into the spatial features. The motivation is that GAN-based deepfakes leave
+          characteristic fingerprints in the frequency domain (checkerboard artifacts, spectral
+          peaks) not easily captured by spatial convolutions. When used alone, the frequency
+          branch offers minimal improvement on C40 (73.50% vs 74.00% baseline) because
+          C40 compression destroys the high-frequency signals the branch relies on.
+          However, when combined with CBAM and Multi-Task Head in the final configuration,
+          it contributes to the overall best result of 81.60% C40 accuracy.
+        </p>
+        <br/>
+        <div class="img-container" align="center">
+          <img src="main resources/freq_c40.jpeg" class="img-fluid text-center" style="max-width:500px;">
+        </div>
+        <p class="caption text-center">Frequency-only model on C40: marginal change versus baseline (73.50% vs 74.00%). Frequency features alone are fragile under heavy compression. (Gap = 0.2270)</p>
+        </div>
+
+        <!-- Update 3: Multi-Task Head -->
+        <div class="update-card" style="border-left-color:#28a745;">
+        <h5 class="mt-0">Update #3: Multi-Task Heads</h5>
+        <p>
+          Two auxiliary output heads were added to enrich the shared encoder with additional
+          supervisory signal: a <strong>manipulation-type classifier</strong> (predicting which of
+          the four FF++ methods was used) and a <strong>binary mask predictor</strong> (localising
+          the manipulated region). These heads force the encoder to learn more semantically meaningful
+          features rather than relying on compression-sensitive texture cues. The Multi-Task Head
+          alone reduces the gap to 0.1988 (C40 = 76.13%). Crucially, when paired with CBAM and
+          the Frequency Branch, the multi-task supervision resolves the interference between the two
+          other modules; the final combination achieves the <strong>best C40 accuracy of 81.60%
+          and gap of 0.1540</strong>, a 33% reduction from baseline.
+        </p>
+        <br/>
+        <div class="img-container" align="center">
+          <img src="main resources/best_c40.jpeg" class="img-fluid text-center" style="max-width:500px;">
+        </div>
+        <p class="caption text-center">Best model (CBAM + Frequency + Multi-Task Head) on C40: accuracy reaches 81.60%. The matrix is nearly symmetric, showing balanced performance on both real and fake samples. (Gap = 0.1540)</p>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ===================== RESULTS ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Results</h2><hr class="section-divider"/>
+        <p>
+          The accuracy progression chart below compares C23 and C40 accuracy across all six
+          configurations. CBAM-based models consistently outperform the baseline on C40 while
+          maintaining near-perfect C23 accuracy. The Frequency Branch alone shows minimal
+          improvement on C40, but contributes meaningfully when combined with the other two
+          modifications. The final CBAM + Frequency + Multi-Task Head configuration
+          achieves the best balance: <strong>97.00% C23 and 81.60% C40</strong>.
+        </p>
+
+        <br/>
+        <div class="img-container" align="center">
+          <img src="main resources/accuracy_progression.jpeg" class="img-fluid text-center">
+        </div>
+        <p class="caption text-center">Accuracy progression across all six configurations for C23 (blue) and C40 (orange). CBAM and CBAM+Freq+Multi-Task Head are the standout performers on C40.</p>
+        <br/>
+
+        <h5 class="mt-4">Confusion Matrices: C23 (Light Compression, 97%+ across all runs)</h5>
+        <div class="row text-center mt-3">
+          <div class="col-md-4">
+            <img src="main resources/cbam_c23.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>CBAM</strong><br/>C23 Acc: 97.00%</small></p>
+          </div>
+          <div class="col-md-4">
+            <img src="main resources/cbam_freq_c23.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>CBAM + Frequency</strong><br/>C23 Acc: 97.30%</small></p>
+          </div>
+          <div class="col-md-4">
+            <img src="main resources/best_c23.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>CBAM + Freq + Multi-Task &#9733;</strong><br/>C23 Acc: 97.00%</small></p>
+          </div>
+        </div>
+        <div class="row text-center mt-3">
+          <div class="col-md-4 offset-md-2">
+            <img src="main resources/freq_c23.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>Frequency only</strong><br/>C23 Acc: 96.20%</small></p>
+          </div>
+          <div class="col-md-4">
+            <img src="main resources/multitask_c23.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>Multi-Task Head</strong><br/>C23 Acc: 96.01%</small></p>
+          </div>
+        </div>
+
+        <h5 class="mt-5">Confusion Matrices: C40 (Heavy Compression, out-of-distribution test)</h5>
+        <div class="row text-center mt-3">
+          <div class="col-md-4">
+            <img src="main resources/cbam_c40.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>CBAM</strong><br/>C40 Acc: ~77%</small></p>
+          </div>
+          <div class="col-md-4">
+            <img src="main resources/cbam_freq_c40.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>CBAM + Frequency</strong><br/>C40 Acc: 74.01%</small></p>
+          </div>
+          <div class="col-md-4">
+            <img src="main resources/best_c40.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>CBAM + Freq + Multi-Task &#9733;</strong><br/>C40 Acc: 81.60%</small></p>
+          </div>
+        </div>
+        <div class="row text-center mt-3">
+          <div class="col-md-4">
+            <img src="main resources/freq_c40.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>Frequency only</strong><br/>C40 Acc: 73.50%</small></p>
+          </div>
+          <div class="col-md-4">
+            <img src="main resources/multitask_c40.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>Multi-Task Head</strong><br/>C40 Acc: 76.13%</small></p>
+          </div>
+          <div class="col-md-4">
+            <img src="main resources/cbam_multitask_c40.jpeg" class="img-fluid">
+            <p class="mt-1"><small><strong>CBAM + Multi-Task</strong><br/>C40 Acc: ~78%</small></p>
+          </div>
+        </div>
+        <br/>
+      </div>
+    </div>
+
+
+    <!-- ===================== TECHNICAL REPORT ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Technical Report</h2><hr class="section-divider"/>
+        <p>Training and evaluation details for all six configurations:</p>
+        <ul>
+          <li><strong>Programming framework:</strong> PyTorch (DeepfakeBench codebase)</li>
+          <li><strong>Training hardware:</strong> Personal laptop with NVIDIA GPU, 6 GB VRAM</li>
+          <li><strong>Backbone:</strong> Xception pretrained on ImageNet</li>
+          <li><strong>Optimizer:</strong> Adam, learning rate 2e-4, weight decay 1e-4</li>
+          <li><strong>Batch size:</strong> 32</li>
+          <li><strong>Frames per video:</strong> 16 (all configurations)</li>
+          <li><strong>Number of epochs:</strong> 20 with early stopping on validation AUC</li>
+          <li><strong>Training time per run:</strong> approximately 6 to 8 hours</li>
+          <li><strong>CBAM placement:</strong> after Xception encoder blocks 1, 2, and 4</li>
+          <li><strong>Frequency Branch:</strong> 4-layer CNN on log-magnitude FFT spectrum with learned gate blending</li>
+          <li><strong>Multi-Task heads:</strong> manipulation-type classifier (4 classes: DF, F2F, FS, NT) + binary mask predictor</li>
+          <li><strong>Key finding:</strong> CBAM is the dominant modification; it alone reduces the gap by 28%. The Frequency Branch on its own is limited by compression destroying high-frequency GAN fingerprints. The Multi-Task Head adds richer supervision that resolves the interference between CBAM and Frequency features, enabling the best combined result.</li>
+        </ul>
+      </div>
+    </div>
+
+
+    <!-- ===================== CONCLUSION ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Conclusion</h2><hr class="section-divider"/>
+        <p>
+          Our experiments show that architectural modifications can substantially close the
+          compression generalization gap in deepfake detection, reducing it from 0.2300 to
+          <strong>0.1540</strong> (a 33% improvement) without sacrificing C23 accuracy.
+        </p>
+        <p>Key findings:</p>
+        <ul>
+          <li>
+            <strong>CBAM is the most impactful single modification.</strong> By directing the encoder
+            toward manipulation-relevant spatial regions, CBAM alone raises C40 accuracy by over
+            6 points and cuts the gap to 0.1652. It works because attention-guided features are
+            more semantically grounded and less dependent on compression-sensitive texture artifacts.
+          </li>
+          <li>
+            <strong>Frequency features alone are fragile under heavy compression.</strong> The FFT
+            magnitude spectrum encodes GAN fingerprints that are entirely destroyed by C40
+            compression, providing no benefit on its own. However, it contributes positively as
+            part of the full combination.
+          </li>
+          <li>
+            <strong>CBAM + Frequency alone is counterproductive.</strong> Adding frequency features
+            to CBAM actually hurts C40 performance (74.01% vs 80.48%), suggesting that the two
+            modules interfere without additional regularisation from the multi-task heads.
+          </li>
+          <li>
+            <strong>Multi-Task supervision resolves the interference.</strong> The auxiliary
+            manipulation-type and mask prediction losses force the shared encoder to learn
+            semantically richer representations, which stabilises training and enables all
+            three modifications to work synergistically, yielding the best C40 accuracy
+            of 81.60% and gap of 0.1540.
+          </li>
+        </ul>
+        <p>
+          <strong>Future work:</strong> Applying domain adaptation (e.g. adversarial feature
+          alignment between C23 and C40 distributions) could further reduce the gap.
+          Testing on other compression codecs (H.264, H.265) and cross-dataset evaluation
+          (trained on FF++, tested on Celeb-DF) would assess whether these gains hold in
+          broader real-world conditions.
+        </p>
+      </div>
+    </div>
+
+
+    <!-- ===================== LIVE DEMO ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">Live Demo</h2><hr class="section-divider"/>
+        <p>
+          Upload any video to run it through our trained RECCE model and get a
+          <strong>REAL</strong> or <strong>FAKE</strong> verdict with per-frame probabilities.
+        </p>
+
+        <!-- Drop zone -->
+        <div id="drop-zone" style="
+            border: 2px dashed #0f3460;
+            border-radius: 8px;
+            padding: 3rem 2rem;
+            text-align: center;
+            background: #f4f6f9;
+            cursor: pointer;
+            transition: background 0.2s;">
+          <div style="font-size:2.5rem; line-height:1;">&#127916;</div>
+          <p style="font-size:1.05rem;color:#0f3460;margin:0.5rem 0 0.25rem;font-weight:600;">
+            Drag &amp; drop a video here, or click to browse
+          </p>
+          <p style="font-size:0.82rem;color:#6c757d;margin:0;">
+            Accepted: mp4, avi, mov, mkv &nbsp;&bull;&nbsp; Max 200 MB
+          </p>
+          <input type="file" id="video-input" accept="video/*" style="display:none;">
+        </div>
+
+        <!-- Selected file info -->
+        <p id="file-name" style="font-size:0.85rem;color:#495057;margin-top:0.6rem;min-height:1.2em;"></p>
+
+        <!-- Analyse button -->
+        <button id="analyse-btn" class="btn btn-primary" disabled
+                style="background-color:#0f3460;border-color:#0f3460;padding:0.5rem 2rem;font-size:1rem;">
+          Analyse Video
+        </button>
+
+        <!-- Progress -->
+        <div id="progress-wrap" class="mt-3" style="display:none;">
+          <div class="progress" style="height:22px;border-radius:6px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                 style="width:100%;background-color:#0f3460;font-size:0.85rem;">
+              Running RECCE model&hellip;
+            </div>
+          </div>
+          <p style="font-size:0.8rem;color:#6c757d;margin-top:0.4rem;">
+            This may take 10&#8211;30 seconds depending on video length.
+          </p>
+        </div>
+
+        <!-- Result -->
+        <div id="result-card" class="mt-4" style="display:none;">
+
+          <!-- Verdict banner -->
+          <div id="verdict-banner" style="border-radius:8px;padding:1.5rem 2rem;color:#fff;text-align:center;">
+            <div id="verdict-text"   style="font-size:3rem;font-weight:800;letter-spacing:0.06em;"></div>
+            <div id="verdict-conf"   style="font-size:1.1rem;margin-top:4px;"></div>
+            <hr style="border-color:rgba(255,255,255,0.35);margin:1rem 0 0.75rem;">
+            <div id="verdict-detail" style="font-size:0.85rem;opacity:0.88;"></div>
+          </div>
+
+          <!-- Per-frame chart -->
+          <div class="mt-3 p-3" style="background:#f4f6f9;border-radius:8px;">
+            <p style="font-size:0.83rem;color:#6c757d;margin-bottom:0.5rem;font-weight:600;">
+              Per-frame fake probability &mdash; red = likely fake &nbsp; green = likely real
+            </p>
+            <div id="frame-bars" style="display:flex;gap:5px;align-items:flex-end;height:90px;"></div>
+            <div id="frame-labels" style="display:flex;gap:5px;margin-top:4px;"></div>
+          </div>
+
+        </div>
+
+        <!-- Error -->
+        <div id="error-box" class="alert alert-danger mt-3" style="display:none;font-size:0.88rem;"></div>
+
+      </div>
+    </div>
+
+
+    <!-- ===================== REFERENCES ===================== -->
+    <div class="row">
+      <div class="col-lg-12 text-left">
+        <h2 class="mt-5">References</h2><hr class="section-divider"/>
+        <ol>
+          <li><a href="https://openaccess.thecvf.com/content/CVPR2022/papers/Cao_End-to-End_Reconstruction-Classification_Learning_for_Face_Forgery_Detection_CVPR_2022_paper.pdf">Cao et al.: End-to-End Reconstruction-Classification Learning for Face Forgery Detection (CVPR 2022)</a></li>
+          <li><a href="https://openaccess.thecvf.com/content_ICCV_2019/papers/Rossler_FaceForensics_Learning_to_Detect_Manipulated_Facial_Images_ICCV_2019_paper.pdf">Rössler et al.: FaceForensics++: Learning to Detect Manipulated Facial Images (ICCV 2019)</a></li>
+          <li><a href="https://openaccess.thecvf.com/content_ECCV_2018/papers/Sanghyun_Woo_Convolutional_Block_Attention_ECCV_2018_paper.pdf">Woo et al.: CBAM: Convolutional Block Attention Module (ECCV 2018)</a></li>
+          <li><a href="https://openaccess.thecvf.com/content_cvpr_2017/papers/Chollet_Xception_Deep_Learning_CVPR_2017_paper.pdf">Chollet: Xception: Deep Learning with Depthwise Separable Convolutions (CVPR 2017)</a></li>
+          <li><a href="https://github.com/SCLBD/DeepfakeBench">DeepfakeBench: A Unified Evaluation Library for Deepfake Detection</a></li>
+        </ol>
+      </div>
+    </div>
+
+  </div>
+
+
+
+  <!-- Footer -->
+  <div class="site-footer">
+    <div class="container">
+      <p class="mb-1">Deepfake Detection &mdash; RECCE Generalization Study</p>
+      <p class="mb-0">CSCE 5310 Applied Machine Learning &nbsp;|&nbsp; The American University in Cairo &nbsp;|&nbsp; Spring 2026</p>
+    </div>
+  </div>
+
+  <!-- Bootstrap core JavaScript -->
+  <script src="../vendor/jquery/jquery.slim.min.js"></script>
+  <script src="../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Live demo logic -->
+  <script>
+    var SERVER = 'http://localhost:5000';
+
+    var dropZone     = document.getElementById('drop-zone');
+    var fileInput    = document.getElementById('video-input');
+    var fileNameEl   = document.getElementById('file-name');
+    var analyseBtn   = document.getElementById('analyse-btn');
+    var progressWrap = document.getElementById('progress-wrap');
+    var resultCard   = document.getElementById('result-card');
+    var verdictBanner= document.getElementById('verdict-banner');
+    var verdictText  = document.getElementById('verdict-text');
+    var verdictConf  = document.getElementById('verdict-conf');
+    var verdictDetail= document.getElementById('verdict-detail');
+    var frameBars    = document.getElementById('frame-bars');
+    var frameLabels  = document.getElementById('frame-labels');
+    var errorBox     = document.getElementById('error-box');
+    var selectedFile = null;
+
+    /* ── drop zone ── */
+    dropZone.addEventListener('click', function () { fileInput.click(); });
+
+    dropZone.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      dropZone.style.background = '#dce8f5';
+    });
+    dropZone.addEventListener('dragleave', function () {
+      dropZone.style.background = '#f4f6f9';
+    });
+    dropZone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      dropZone.style.background = '#f4f6f9';
+      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', function () {
+      if (fileInput.files.length) setFile(fileInput.files[0]);
+    });
+
+    function setFile(f) {
+      selectedFile = f;
+      var mb = (f.size / 1024 / 1024).toFixed(1);
+      fileNameEl.textContent = '✓  ' + f.name + '  (' + mb + ' MB)';
+      analyseBtn.disabled = false;
+      resultCard.style.display = 'none';
+      errorBox.style.display   = 'none';
+    }
+
+    /* ── analyse ── */
+    analyseBtn.addEventListener('click', function () {
+      if (!selectedFile) return;
+
+      analyseBtn.disabled      = true;
+      progressWrap.style.display = 'block';
+      resultCard.style.display   = 'none';
+      errorBox.style.display     = 'none';
+
+      var form = new FormData();
+      form.append('video', selectedFile);
+
+      fetch(SERVER + '/predict', { method: 'POST', body: form })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          progressWrap.style.display = 'none';
+          analyseBtn.disabled = false;
+          if (data.error) { showError(data.error); return; }
+          showResult(data);
+        })
+        .catch(function () {
+          progressWrap.style.display = 'none';
+          analyseBtn.disabled = false;
+          showError(
+            'Cannot reach the model server. ' +
+            'Open a terminal and run:  python app.py  from the website-template folder, then try again.'
+          );
+        });
+    });
+
+    /* ── render result ── */
+    function showResult(data) {
+      var isFake = data.verdict === 'FAKE';
+      verdictBanner.style.background = isFake ? '#c0392b' : '#27ae60';
+      verdictText.textContent  = data.verdict;
+      verdictConf.textContent  = data.confidence + '% confidence';
+      verdictDetail.textContent =
+        'Average fake probability: ' + data.fake_prob + '%' +
+        '   •   Frames analysed: ' + data.frames_analyzed +
+        (data.face_detected ? '' : '   •   No face detected — used centre crop');
+
+      /* per-frame bars */
+      frameBars.innerHTML   = '';
+      frameLabels.innerHTML = '';
+
+      data.frame_probs.forEach(function (p, i) {
+        var bar = document.createElement('div');
+        bar.title = 'Frame ' + (i + 1) + ': ' + p + '% fake';
+        bar.style.cssText =
+          'flex:1;' +
+          'height:' + Math.max(3, p) + '%;' +
+          'background:' + (p >= 50 ? '#c0392b' : '#27ae60') + ';' +
+          'border-radius:3px 3px 0 0;' +
+          'transition:height 0.5s;' +
+          'cursor:default;';
+        frameBars.appendChild(bar);
+
+        var lbl = document.createElement('div');
+        lbl.textContent = p + '%';
+        lbl.style.cssText =
+          'flex:1;font-size:0.65rem;color:#6c757d;text-align:center;';
+        frameLabels.appendChild(lbl);
+      });
+
+      resultCard.style.display = 'block';
+    }
+
+    function showError(msg) {
+      errorBox.textContent   = msg;
+      errorBox.style.display = 'block';
+    }
+  </script>
+
+</body>
+
+</html>
