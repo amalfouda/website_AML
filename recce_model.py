@@ -1,16 +1,10 @@
-"""
-Standalone RECCE model — no DeepfakeBench registry dependency.
-Classes copied verbatim from DeepfakeBench/training/detectors/recce_detector.py
-and DeepfakeBench/training/networks/xception.py, keeping only what is needed
-for inference.
-"""
-
 from functools import partial
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models import xception
+from metrics.registry import DETECTOR
 
 
 # ── Helpers copied from networks/xception.py ───────────────────────────────
@@ -209,7 +203,7 @@ class CBAM(nn.Module):
 
 
 class FrequencyBranch(nn.Module):
-    """FFT-based frequency branch (disabled at inference — kept for checkpoint compatibility)."""
+    """FFT-based frequency branch — extracts frequency-domain features."""
 
     def __init__(self, in_channels=3, features=2048):
         super().__init__()
@@ -225,29 +219,33 @@ class FrequencyBranch(nn.Module):
         )
         self.pool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512, features)
-        self.gate = nn.Sequential(nn.Linear(features * 2, features), nn.Sigmoid())
-        nn.init.zeros_(self.gate[0].weight)
-        nn.init.constant_(self.gate[0].bias, -3.0)
 
-    def forward(self, x, spatial_features):
+    def forward(self, x):
         x_freq = torch.log1p(torch.abs(torch.fft.fft2(x.float(), norm='ortho'))).float()
-        freq_feat = self.fc(self.pool(self.dct_conv(x_freq)).squeeze(2).squeeze(2))
-        gate_w = self.gate(torch.cat([spatial_features, freq_feat], dim=1))
-        return spatial_features + gate_w * freq_feat
+        return self.fc(self.pool(self.dct_conv(x_freq)).squeeze(2).squeeze(2))
 
 
 # ── Main model ──────────────────────────────────────────────────────────────
 
 _ENCODER_FEATURES = 2048
 
+@DETECTOR.register_module(module_name='recce')
 class Recce(nn.Module):
     """End-to-End Reconstruction-Classification Learning for Face Forgery Detection."""
 
     # Manipulation-type class names (for the 4-class head)
     MANIPULATION_CLASSES = ['DeepFakes', 'Face2Face', 'FaceSwap', 'NeuralTextures']
 
-    def __init__(self, num_classes=2, drop_rate=0.2, num_types=4):
+    def __init__(self, config_or_num_classes=2, drop_rate=0.2, num_types=4):
         super().__init__()
+        # Accept either a config dict (from train.py) or plain int num_classes
+        if isinstance(config_or_num_classes, dict):
+            config = config_or_num_classes
+            num_classes = config.get('num_classes', 2)
+            drop_rate = config.get('drop_rate', 0.2)
+            num_types = config.get('num_types', 4)
+        else:
+            num_classes = config_or_num_classes
         self.name = "xception"
         self.loss_inputs = dict()
         self.encoder = xception(pretrained=False)
@@ -281,8 +279,10 @@ class Recce(nn.Module):
         )
 
         self.attention = GuidedAttention(depth=728, drop_rate=drop_rate)
-        # FrequencyBranch is kept for checkpoint key compatibility but not called
-        # self.freq_branch = FrequencyBranch(in_channels=3, features=_ENCODER_FEATURES)
+        self.freq_branch = FrequencyBranch(in_channels=3, features=_ENCODER_FEATURES)
+        self.mha = nn.MultiheadAttention(
+            embed_dim=_ENCODER_FEATURES, num_heads=8, batch_first=True, dropout=drop_rate)
+        self.mha_norm = nn.LayerNorm(_ENCODER_FEATURES)
         self.cbam1 = CBAM(channels=128)
         self.cbam2 = CBAM(channels=256)
         self.cbam3 = CBAM(channels=728)
@@ -376,17 +376,72 @@ class Recce(nn.Module):
 
         embedding = self.global_pool(embedding).squeeze(2).squeeze(2)
         embedding = self.dropout(embedding)
-        # freq_branch disabled — gate learned to close on C23-only training
+
+        # Frequency branch + multi-head cross-attention fusion
+        freq_feat = self.freq_branch(x)                          # (B, 2048)
+        seq = torch.stack([embedding, freq_feat], dim=1)         # (B, 2, 2048)
+        attn_out, _ = self.mha(seq, seq, seq)
+        embedding = self.mha_norm(seq + attn_out)[:, 0]          # residual + norm, take spatial token
+
         return embedding
 
     def classifier(self, embedding):
         return self.fc(embedding)
 
-    def forward(self, x):
-        return self.classifier(self.features(x))
+    def build_backbone(self, config):
+        pass
+
+    def build_loss(self, config):
+        pass
+
+    def forward(self, data_dict: dict, inference=False) -> dict:
+        """Accept the trainer's data_dict and return a pred_dict."""
+        x = data_dict['image']
+        embedding = self.features(x)
+        cls_logits = self.fc(embedding)
+        prob = torch.softmax(cls_logits, dim=1)[:, 1]
+        return {
+            'cls':  cls_logits,
+            'prob': prob,
+            'feat': embedding,
+        }
+
+    def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
+        label = data_dict['label']
+        cls_loss = F.cross_entropy(pred_dict['cls'], label)
+
+        # Reconstruction loss: penalise deviation of reconstruction from input
+        recons_loss = torch.tensor(0., device=cls_loss.device)
+        for recons_x in self.loss_inputs.get('recons', []):
+            recons_loss = recons_loss + F.l1_loss(recons_x, data_dict['image'])
+
+        # Contrastive loss: push fake-fake correlations high, real-fake low
+        contra_loss = torch.tensor(0., device=cls_loss.device)
+        for corr in self.loss_inputs.get('contra', []):
+            B = label.shape[0]
+            if B < 2:
+                continue
+            label_eq = label.unsqueeze(1).eq(label.unsqueeze(0)).float()  # (B, B)
+            contra_loss = contra_loss + F.binary_cross_entropy(
+                corr.clamp(1e-6, 1 - 1e-6), label_eq)
+
+        overall = cls_loss + recons_loss + contra_loss
+        return {
+            'overall':   overall,
+            'cls':       cls_loss,
+            'recons':    recons_loss,
+            'contra':    contra_loss,
+        }
+
+    def get_train_metrics(self, data_dict: dict, pred_dict: dict) -> dict:
+        label = data_dict['label'].cpu().numpy()
+        prob = pred_dict['prob'].detach().cpu().numpy()
+        pred = (prob >= 0.5).astype(int)
+        acc = (pred == label).mean()
+        return {'acc': acc}
 
     def forward_multitask(self, x):
-        """Multi-task forward pass.
+        """Multi-task forward pass (standalone, not used by trainer).
 
         Returns a dict:
             fake_logits  – (B, 2)            real/fake binary logits
